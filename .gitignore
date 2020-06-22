@@ -32,4 +32,3 @@ out/
 .vscode/
 .DS_Store
 build.gradle
-src/
