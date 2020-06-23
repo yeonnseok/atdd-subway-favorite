@@ -1,5 +1,6 @@
 package wooteco.subway.web.member;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,11 +9,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.filter.CharacterEncodingFilter;
 import wooteco.subway.domain.member.Member;
 import wooteco.subway.infra.JwtTokenProvider;
 import wooteco.subway.service.member.MemberService;
 import wooteco.subway.service.member.NotExistedEmailException;
 import wooteco.subway.service.member.WrongPasswordException;
+import wooteco.subway.service.member.dto.UpdateMemberRequest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -20,6 +25,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,14 +35,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class LoginMemberControllerTest {
 
-    @Autowired
-    private MockMvc mvc;
+    @Autowired private MockMvc mvc;
+    @Autowired private WebApplicationContext ctx;
 
-    @MockBean
-    private MemberService memberService;
+    @MockBean private MemberService memberService;
+    @MockBean private JwtTokenProvider jwtTokenProvider;
 
-    @MockBean
-    private JwtTokenProvider jwtTokenProvider;
+    private Member member;
+
+    @BeforeEach
+    void setup() {
+        mvc = MockMvcBuilders.webAppContextSetup(ctx)
+                .addFilters(new CharacterEncodingFilter("UTF-8", true))
+                .alwaysDo(print())
+                .build();
+        member = new Member(63L, "bossdog@email.com", "boss", "dog");
+        given(memberService.findMemberByEmail(any())).willReturn(member);
+        given(jwtTokenProvider.validateToken(any())).willReturn(true);
+        given(jwtTokenProvider.getSubject(any())).willReturn(member.getEmail());
+    }
 
     @DisplayName("로그인")
     @Test
@@ -97,5 +115,31 @@ class LoginMemberControllerTest {
                         + "\"name\":\"boss\"}"));
 
         verify(memberService).findMemberByEmail(eq(member.getEmail()));
+    }
+
+    @DisplayName("로그인 정보 수정")
+    @Test
+    void updateLoginMember() throws Exception {
+        UpdateMemberRequest request = new UpdateMemberRequest("changedName", "changedPassword");
+
+        mvc.perform(put("/me")
+                .accept(MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"changedName\",\"password\":\"changedPassword\"}")
+                .header("Authorization", "Bearer mockToken"))
+                .andDo(print())
+                .andExpect(status().isOk());
+    }
+
+    @DisplayName("회원 탈퇴")
+    @Test
+    void deleteLoginMember() throws Exception {
+        mvc.perform(delete("/me")
+                .accept(MediaType.APPLICATION_JSON)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "ACCESS_TOKEN"))
+                .andExpect(status().isNoContent());
+
+        verify(memberService).deleteMember(eq(63L));
     }
 }
