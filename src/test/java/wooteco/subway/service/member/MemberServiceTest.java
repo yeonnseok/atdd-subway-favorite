@@ -111,6 +111,17 @@ public class MemberServiceTest {
         verify(memberRepository).findById(eq(member.getId()));
     }
 
+    @DisplayName("회원 정보 수정할 때 없는 회원일 경우 예외 발생")
+    @Test
+    void notExistedMember() {
+        Member member = new Member(63L, TEST_USER_EMAIL, TEST_USER_NAME, TEST_USER_PASSWORD);
+        when(memberRepository.findById(any())).thenThrow(NotExistUserException.class);
+
+        final UpdateMemberRequest updateParam = new UpdateMemberRequest("abc", "abc");
+        assertThatThrownBy(() -> memberService.updateMember(member.getId(), updateParam))
+                .isInstanceOf(NotExistUserException.class);
+    }
+
     @DisplayName("회원 탈퇴 기능")
     @Test
     void deleteMember() {
